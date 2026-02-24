@@ -23,6 +23,29 @@ AFRAME.registerComponent('duplicate', {
 
     this.clones = [];
 
+    /*  gltf: {}
+    
+        this.clone0 = this.el.cloneNode();
+        this.clone0.removeAttribute('duplicate');
+        this.parent = document.createElement('a-entity');
+        const box3d = new THREE.Box3.setFromObject(this.el.object3D);
+        const size = new THREE.Vector3();
+        box3d.getSize(size);
+        this.width = size.x;
+        this.depth = size.z;
+        this.createDuplicates();
+      },
+      
+      createDuplicates: function () {
+        const clone = this.clone0.cloneNode();
+        clone.object3D.position.set(this.width, 0, this.depth);
+        if (this.data.gltf) clone.setAttribute('gltf-model', this.data.gltf);
+        this.parent.appendChild(clone);
+        this.el.appendChild(this.parent);
+
+      }
+    
+     */
     for (let i = 0; i < this.data.rows; i++) {
       for (let j = 0; j < this.data.cols; j++) {
         if (i === 0 && j === 0) {
@@ -46,6 +69,8 @@ AFRAME.registerComponent('duplicate', {
     }
   },
 
+  update: function () {
+  },
 
   remove: function () {
     if (!this.clones) return;

@@ -11,13 +11,12 @@ const fullReloadPlugin = {
 
 export default defineConfig(({ command, mode }) => {
   const config = {
-    base: "/aframe-vue-boilerplate/",
+    base: "/",
     plugins: [
       basicSsl(),
       vue({
         template: {
           compilerOptions: {
-            // Allow A-Frame elements to be in Vue template
             isCustomElement: (tag) => tag.startsWith("a-"),
           },
         },

@@ -17,11 +17,11 @@ const props = defineProps({
 });
  
 const navmeshWidth = computed(() =>
-  props.cols * props.tileSize + Math.max(props.cols - 1, 0) * props.offset
+  props.rows * props.tileSize + Math.max(props.rows - 1, 0) * props.offset
 );
  
 const navmeshDepth = computed(() =>
-  props.rows * props.tileDepth + Math.max(props.rows - 1, 0) * props.offset
+  props.cols * props.tileDepth + Math.max(props.cols - 1, 0) * props.offset
 );
 </script>
  
@@ -36,9 +36,9 @@ const navmeshDepth = computed(() =>
       :depth="navmeshDepth"
       material="opacity: 100; transparent: false; shader: flat"
       color="red"
-      visible="true"
+      visible="false"
     ></a-box>
-    <a-box
+    <a-box v-if="visible"
       :position="`${posX} ${posY} ${posZ}`"
       :width="tileSize"
       :height="0.2"

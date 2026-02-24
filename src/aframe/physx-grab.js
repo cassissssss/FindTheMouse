@@ -37,89 +37,127 @@ SOFTWARE.
 
 AFRAME.registerComponent('physx-grab', {
   init: function () {
-
-    // If a state of "grabbed" is set on a physx-body entity,
-    // the entity is automatically transformed into a kinematic entity.
-    // To avoid triggering this (we want to grab using constraints, and leave the
-    // body as dynamic), we use a non-clashing name for the state we set on the entity when
-    // grabbing it.
+    // Non-clashing state name
     this.GRABBED_STATE = 'grabbed-dynamic';
 
     this.grabbing = false;
-    this.hitEl =      /** @type {AFRAME.Element}    */ null;
+    this.hitEl = /** @type {AFRAME.Element|null} */ (null);
+    this.currentHoveredEl = null;
+    this.joint = null;
 
     // Bind event handlers
     this.onHit = this.onHit.bind(this);
+    this.onContactEnd = this.onContactEnd.bind(this);
     this.onGripOpen = this.onGripOpen.bind(this);
     this.onGripClose = this.onGripClose.bind(this);
-
   },
 
   play: function () {
-    var el = this.el;
+    const el = this.el;
     el.addEventListener('contactbegin', this.onHit);
+    el.addEventListener('contactend', this.onContactEnd);
+
     el.addEventListener('gripdown', this.onGripClose);
     el.addEventListener('gripup', this.onGripOpen);
+
     el.addEventListener('trackpaddown', this.onGripClose);
     el.addEventListener('trackpadup', this.onGripOpen);
+
     el.addEventListener('triggerdown', this.onGripClose);
     el.addEventListener('triggerup', this.onGripOpen);
   },
 
   pause: function () {
-    var el = this.el;
+    const el = this.el;
     el.removeEventListener('contactbegin', this.onHit);
+    el.removeEventListener('contactend', this.onContactEnd);
+
     el.removeEventListener('gripdown', this.onGripClose);
     el.removeEventListener('gripup', this.onGripOpen);
+
     el.removeEventListener('trackpaddown', this.onGripClose);
     el.removeEventListener('trackpadup', this.onGripOpen);
+
     el.removeEventListener('triggerdown', this.onGripClose);
     el.removeEventListener('triggerup', this.onGripOpen);
   },
 
-  onGripClose: function (evt) {
+  onGripClose: function () {
     this.grabbing = true;
   },
 
-  onGripOpen: function (evt) {
-    var hitEl = this.hitEl;
+  onGripOpen: function () {
+    const hitEl = this.hitEl;
     this.grabbing = false;
-    if (!hitEl) { return; }
+
+    if (!hitEl) return;
+
     hitEl.removeState(this.GRABBED_STATE);
 
-    this.hitEl = undefined;
+    // Remove outline-bloom when releasing
+    if (this.currentHoveredEl && this.currentHoveredEl.is('hovered')) {
+      this.currentHoveredEl.removeState('hovered');
+      const outlineBloom = this.el.sceneEl?.components?.['outline-bloom'];
+      if (outlineBloom) outlineBloom.removeObject(this.currentHoveredEl);
+    }
 
-    this.removeJoint()
+    this.hitEl = null;
+    this.currentHoveredEl = null;
+
+    this.removeJoint();
+  },
+
+  onContactEnd: function (evt) {
+    const hitEl = evt.detail?.otherComponent?.el;
+    if (!hitEl || !hitEl.is('hovered')) return;
+
+    hitEl.removeState('hovered');
+    const outlineBloom = this.el.sceneEl?.components?.['outline-bloom'];
+    if (outlineBloom) outlineBloom.removeObject(hitEl);
+
+    if (this.currentHoveredEl === hitEl) this.currentHoveredEl = null;
   },
 
   onHit: function (evt) {
-    var hitEl = evt.detail.otherComponent?.el;
+    const hitEl = evt.detail?.otherComponent?.el;
+    if (!hitEl) return;
+
     if (!hitEl.hasAttribute('physx-grabbable')) return;
-    if (hitEl && hitEl.components['physx-body'].data.type === 'static') return;
-    // If the element is already grabbed (it could be grabbed by another controller).
-    // If the hand is not grabbing the element does not stick.
-    // If we're already grabbing something you can't grab again.
-    if (!hitEl || hitEl.is(this.GRABBED_STATE) || !this.grabbing || this.hitEl) { return; }
+
+    const body = hitEl.components?.['physx-body'];
+    if (body?.data?.type === 'static') return;
+
+    // Hover outline
+    if (!hitEl.is('hovered')) {
+      hitEl.addState('hovered');
+      const outlineBloom = this.el.sceneEl?.components?.['outline-bloom'];
+      if (outlineBloom) outlineBloom.addObject(hitEl);
+      this.currentHoveredEl = hitEl;
+    }
+
+    // Must be grabbing + not already grabbing something
+    if (hitEl.is(this.GRABBED_STATE) || !this.grabbing || this.hitEl) return;
+
     hitEl.addState(this.GRABBED_STATE);
     this.hitEl = hitEl;
 
-    this.addJoint(hitEl, evt.target)
+    // IMPORTANT: joint target is the element that has physx-grab (this.el)
+    this.addJoint(hitEl, this.el);
   },
 
-  addJoint(el, target) {
+  addJoint: function (el, target) {
+    this.removeJoint();
 
-    this.removeJoint()
+    if (!target?.id) return;
 
-    this.joint = document.createElement('a-entity')
-    this.joint.setAttribute("physx-joint", `type: Fixed; target: #${target.id}`)
-
-    el.appendChild(this.joint)
+    this.joint = document.createElement('a-entity');
+    this.joint.setAttribute('physx-joint', `type: Fixed; target: #${target.id}`);
+    el.appendChild(this.joint);
   },
 
-  removeJoint() {
-
-    if (!this.joint) return
-    this.joint.parentElement.removeChild(this.joint)
-    this.joint = null
+  removeJoint: function () {
+    if (!this.joint) return;
+    if (this.joint.parentElement) this.joint.parentElement.removeChild(this.joint);
+    this.joint = null;
   }
 });

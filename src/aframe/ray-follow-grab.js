@@ -1,3 +1,4 @@
+// ray-follow-grab.js
 AFRAME.registerComponent('ray-follow-grab', {
     schema: {
         grabbableSelector: { type: 'string', default: '[physx-grabbable]' },
@@ -8,8 +9,15 @@ AFRAME.registerComponent('ray-follow-grab', {
         rotateWithThumbstick: { type: 'boolean', default: true },
         rotationSpeed: { type: 'number', default: 200 },
 
+        // collisions
         wallSelector: { type: 'string', default: '.room-collider' },
-        wallPadding: { type: 'number', default: 0.01 } // petite marge
+        wallPadding: { type: 'number', default: 0.01 },
+
+        collidableSelector: { type: 'string', default: '[physx-grabbable]' },
+        objectPadding: { type: 'number', default: 0.01 },
+
+        // physics drop
+        usePhysicsDrop: { type: 'boolean', default: true }
     },
 
     init() {
@@ -36,13 +44,23 @@ AFRAME.registerComponent('ray-follow-grab', {
         this._yawDeltaRad = 0
         this._yawQuat = new THREE.Quaternion()
 
+        // temp boxes
         this._tmpBox = new THREE.Box3()
         this._tmpWallBox = new THREE.Box3()
-        this._tmpVec = new THREE.Vector3()
+        this._tmpOtherBox = new THREE.Box3()
+
         this._lastValidWorldPos = new THREE.Vector3()
         this._hasLastValid = false
 
-        // binds
+        // physx cache
+        this._prevPhysxBody = null
+        this._hadPhysxBody = false
+
+        // reusable temps
+        this._tmpQuat = new THREE.Quaternion()
+        this._tmpEuler = new THREE.Euler(0, 0, 0, 'YXZ')
+
+        this._onForceGrab = this._onForceGrab.bind(this)
         this._onDown = this._onDown.bind(this)
         this._onUp = this._onUp.bind(this)
         this._onThumbstickMoved = this._onThumbstickMoved.bind(this)
@@ -54,6 +72,7 @@ AFRAME.registerComponent('ray-follow-grab', {
         this.el.addEventListener('gripdown', this._onDown)
         this.el.addEventListener('gripup', this._onUp)
         this.el.addEventListener('thumbstickmoved', this._onThumbstickMoved)
+        this.el.addEventListener('grab:force', this._onForceGrab)
     },
 
     pause() {
@@ -62,6 +81,13 @@ AFRAME.registerComponent('ray-follow-grab', {
         this.el.removeEventListener('gripdown', this._onDown)
         this.el.removeEventListener('gripup', this._onUp)
         this.el.removeEventListener('thumbstickmoved', this._onThumbstickMoved)
+        this.el.removeEventListener('grab:force', this._onForceGrab)
+    },
+
+    _getThreeRay() {
+        const rc = this.el.components.raycaster
+        // ✅ IMPORTANT: en VR, la source fiable est souvent raycaster.raycaster.ray
+        return rc?.raycaster?.raycaster?.ray || rc?.raycaster?.ray || null
     },
 
     _onThumbstickMoved(evt) {
@@ -88,20 +114,31 @@ AFRAME.registerComponent('ray-follow-grab', {
         const hits = rc.intersections || []
         if (!hits.length) return null
 
-        const hit = hits[0]
-        let target = hit.object?.el || null
-        if (!target) return null
+        for (const hit of hits) {
+            let obj = hit.object || null
+            while (obj && !obj.el) obj = obj.parent
 
-        while (target && target !== this.el.sceneEl && !target.matches(this.data.grabbableSelector)) {
-            target = target.parentEl
-        }
-        if (!target || !target.matches(this.data.grabbableSelector)) return null
+            let target = obj?.el || null
+            if (!target) continue
 
-        return {
-            target,
-            distance: typeof hit.distance === 'number' ? hit.distance : null,
-            point: hit.point ? hit.point.clone() : null
+            while (
+                target &&
+                target !== this.el.sceneEl &&
+                !target.matches(this.data.grabbableSelector)
+            ) {
+                target = target.parentEl
+            }
+
+            if (!target || !target.matches(this.data.grabbableSelector)) continue
+
+            return {
+                target,
+                distance: typeof hit.distance === 'number' ? hit.distance : null,
+                point: hit.point ? hit.point.clone() : null
+            }
         }
+
+        return null
     },
 
     _readYConstraints(el) {
@@ -128,11 +165,12 @@ AFRAME.registerComponent('ray-follow-grab', {
     _collectFloorMeshes() {
         const sceneEl = this.el.sceneEl
         if (!sceneEl) return []
-        const floorEls = Array.from(sceneEl.querySelectorAll('.floor'))
         const floorMeshes = []
-        for (const fe of floorEls) {
-            fe.object3D.traverse((obj) => { if (obj.isMesh) floorMeshes.push(obj) })
-        }
+        sceneEl.querySelectorAll('.floor').forEach((fe) => {
+            fe.object3D.traverse((obj) => {
+                if (obj.isMesh) floorMeshes.push(obj)
+            })
+        })
         return floorMeshes
     },
 
@@ -171,20 +209,19 @@ AFRAME.registerComponent('ray-follow-grab', {
     _getWallMeshes() {
         const sceneEl = this.el.sceneEl
         if (!sceneEl) return []
-        const els = Array.from(sceneEl.querySelectorAll(this.data.wallSelector))
         const meshes = []
-        for (const e of els) {
-            e.object3D.traverse((obj) => { if (obj.isMesh) meshes.push(obj) })
-        }
+        Array.from(sceneEl.querySelectorAll(this.data.wallSelector)).forEach((e) => {
+            e.object3D.traverse((obj) => {
+                if (obj.isMesh) meshes.push(obj)
+            })
+        })
         return meshes
     },
 
     _wouldCollideWithWalls(el) {
-        // AABB de l'objet (world)
         el.object3D.updateMatrixWorld(true)
         this._tmpBox.setFromObject(el.object3D)
 
-        // padding (un tout petit “air gap”)
         this._tmpBox.min.x -= this.data.wallPadding
         this._tmpBox.min.y -= this.data.wallPadding
         this._tmpBox.min.z -= this.data.wallPadding
@@ -200,6 +237,81 @@ AFRAME.registerComponent('ray-follow-grab', {
         return false
     },
 
+    _getCollidableEls() {
+        const sceneEl = this.el.sceneEl
+        if (!sceneEl) return []
+        return Array.from(sceneEl.querySelectorAll(this.data.collidableSelector))
+    },
+
+    _wouldCollideWithObjects(el) {
+        el.object3D.updateMatrixWorld(true)
+        this._tmpBox.setFromObject(el.object3D)
+
+        this._tmpBox.min.x -= this.data.objectPadding
+        this._tmpBox.min.y -= this.data.objectPadding
+        this._tmpBox.min.z -= this.data.objectPadding
+        this._tmpBox.max.x += this.data.objectPadding
+        this._tmpBox.max.y += this.data.objectPadding
+        this._tmpBox.max.z += this.data.objectPadding
+
+        const others = this._getCollidableEls()
+        for (const other of others) {
+            if (!other || other === el) continue
+            other.object3D.updateMatrixWorld(true)
+            this._tmpOtherBox.setFromObject(other.object3D)
+            if (this._tmpBox.intersectsBox(this._tmpOtherBox)) return true
+        }
+        return false
+    },
+
+    _setPhysxBodyType(el, type) {
+        const body = el.getAttribute('physx-body')
+        if (!body) return
+        el.setAttribute('physx-body', { ...body, type })
+    },
+
+    _cachePhysxBody(el) {
+        const body = el.getAttribute('physx-body')
+        this._hadPhysxBody = !!body
+        this._prevPhysxBody = body ? { ...body } : null
+    },
+
+    _setHeldPoseLocal(parentObj, localPos, quatWorld) {
+        // Position
+        if (this.data.usePhysicsDrop) {
+            this.heldEl.setAttribute('position', `${localPos.x} ${localPos.y} ${localPos.z}`)
+        } else {
+            this.heldEl.object3D.position.copy(localPos)
+        }
+
+        // Rotation
+        if (!this.data.rotateWithThumbstick) return
+
+        if (this.data.usePhysicsDrop) {
+            this._tmpEuler.setFromQuaternion(quatWorld, 'YXZ')
+            const rx = THREE.MathUtils.radToDeg(this._tmpEuler.x)
+            const ry = THREE.MathUtils.radToDeg(this._tmpEuler.y)
+            const rz = THREE.MathUtils.radToDeg(this._tmpEuler.z)
+            this.heldEl.setAttribute('rotation', `${rx} ${ry} ${rz}`)
+        } else {
+            this.heldEl.object3D.quaternion.copy(quatWorld)
+        }
+    },
+
+    _revertToLastValid(parentObj) {
+        if (!this._hasLastValid) return
+        const revertLocal = parentObj.worldToLocal(this._lastValidWorldPos.clone())
+        if (this.data.usePhysicsDrop) {
+            this.heldEl.setAttribute(
+                'position',
+                `${revertLocal.x} ${revertLocal.y} ${revertLocal.z}`
+            )
+        } else {
+            this.heldEl.object3D.position.copy(revertLocal)
+            this.heldEl.object3D.updateMatrixWorld(true)
+        }
+    },
+
     _onDown() {
         if (this.isHolding) return
 
@@ -208,6 +320,15 @@ AFRAME.registerComponent('ray-follow-grab', {
 
         this.heldEl = hit.target
         this.isHolding = true
+
+        this.heldEl.emit('grab-start', { hand: this.el }, false)
+
+        if (this.data.usePhysicsDrop) {
+            this._cachePhysxBody(this.heldEl)
+            this._setPhysxBodyType(this.heldEl, 'kinematic')
+            const p = this.heldEl.getAttribute('position')
+            if (p) this.heldEl.setAttribute('position', `${p.x} ${p.y} ${p.z}`)
+        }
 
         this._readYConstraints(this.heldEl)
 
@@ -246,13 +367,17 @@ AFRAME.registerComponent('ray-follow-grab', {
     _onUp() {
         if (!this.isHolding || !this.heldEl) return
 
-        // (ton snap floor si lock, tu peux le garder ici si tu veux)
-        // mais avec la contrainte Y lock, c’est déjà propre.
+        if (this.data.usePhysicsDrop) {
+            const p = this.heldEl.getAttribute('position')
+            if (p) this.heldEl.setAttribute('position', `${p.x} ${p.y} ${p.z}`)
+            this._setPhysxBodyType(this.heldEl, 'dynamic')
+        }
 
         this._grabOffsetWorld.set(0, 0, 0)
         this._yawDeltaRad = 0
 
         this.isHolding = false
+        this.heldEl.emit('grab-end', { hand: this.el }, false)
         this.heldEl = null
         this._resetYConstraints()
         this._hasLastValid = false
@@ -261,12 +386,11 @@ AFRAME.registerComponent('ray-follow-grab', {
     tick() {
         if (!this.isHolding || !this.heldEl) return
 
-        const rc = this.el.components.raycaster
-        const ray = rc?.raycaster?.ray
-        if (!ray) return
+        const threeRay = this._getThreeRay()
+        if (!threeRay) return
 
-        this._origin.copy(ray.origin)
-        this._dir.copy(ray.direction).normalize()
+        this._origin.copy(threeRay.origin)
+        this._dir.copy(threeRay.direction).normalize()
 
         // candidate world position
         this._pos.copy(this._origin).add(this._dir.multiplyScalar(this.holdDistance))
@@ -274,31 +398,85 @@ AFRAME.registerComponent('ray-follow-grab', {
 
         this._applyYConstraints(this._pos)
 
-        // appliquer candidate
         const parentObj = this.heldEl.object3D.parent
         if (!parentObj) return
         parentObj.updateMatrixWorld(true)
 
         const localPos = parentObj.worldToLocal(this._pos.clone())
-        this.heldEl.object3D.position.copy(localPos)
 
-        if (this.data.rotateWithThumbstick) {
-            this._yawQuat.setFromAxisAngle(new THREE.Vector3(0, 1, 0), this._yawDeltaRad)
-            this.heldEl.object3D.quaternion.copy(this._startGrabQuat).multiply(this._yawQuat)
-        }
+        this._yawQuat.setFromAxisAngle(new THREE.Vector3(0, 1, 0), this._yawDeltaRad)
+        this._tmpQuat.copy(this._startGrabQuat).multiply(this._yawQuat)
+
+        this._setHeldPoseLocal(parentObj, localPos, this._tmpQuat)
 
         this.heldEl.object3D.updateMatrixWorld(true)
 
         if (this._wouldCollideWithWalls(this.heldEl)) {
-            if (this._hasLastValid) {
-                const revertLocal = parentObj.worldToLocal(this._lastValidWorldPos.clone())
-                this.heldEl.object3D.position.copy(revertLocal)
-                this.heldEl.object3D.updateMatrixWorld(true)
-            }
+            this._revertToLastValid(parentObj)
+            return
+        }
+
+        if (this._wouldCollideWithObjects(this.heldEl)) {
+            this._revertToLastValid(parentObj)
             return
         }
 
         this.heldEl.object3D.getWorldPosition(this._lastValidWorldPos)
+        this._hasLastValid = true
+    },
+
+    _onForceGrab(evt) {
+        if (this.isHolding) return
+        const target = evt?.detail?.target
+        if (!target) return
+
+        this.heldEl = target
+        this.isHolding = true
+
+        this.heldEl.emit('grab-start', { hand: this.el }, false)
+
+        // optionnel : forcer un refresh du raycaster si dispo (certaines versions)
+        this.el.components.raycaster?.refreshObjects?.()
+
+        if (this.data?.usePhysicsDrop) {
+            this._cachePhysxBody?.(this.heldEl)
+            this._setPhysxBodyType?.(this.heldEl, 'kinematic')
+        }
+
+        this._readYConstraints(this.heldEl)
+
+        this._yawDeltaRad = 0
+        this.heldEl.object3D.getWorldQuaternion(this._startGrabQuat)
+
+        const d = evt?.detail?.distance
+        this.holdDistance =
+            typeof d === 'number' && isFinite(d)
+                ? THREE.MathUtils.clamp(d, 0.15, this.data.maxDistance)
+                : this.data.holdDistance ?? 0.7
+
+        // grab direct au bout du laser
+        this._grabOffsetWorld.set(0, 0, 0)
+
+        // ✅ recalcul bottom si yMode lock
+        if (this._yMode === 'lock') {
+            const cfg = this.heldEl.getAttribute('physx-grabbable') || {}
+            const floorOffsetY = Number.isFinite(cfg.floorOffsetY) ? cfg.floorOffsetY : 0
+
+            this.heldEl.object3D.updateMatrixWorld(true)
+            const objWorldPos = new THREE.Vector3()
+            this.heldEl.object3D.getWorldPosition(objWorldPos)
+
+            const box = new THREE.Box3().setFromObject(this.heldEl.object3D)
+            const bottomY = box.min.y
+            const pivotY = objWorldPos.y
+
+            this._pivotToBottom = pivotY - bottomY
+            this._bottomClearance = floorOffsetY
+        }
+
+        const objWorldPos = new THREE.Vector3()
+        this.heldEl.object3D.getWorldPosition(objWorldPos)
+        this._lastValidWorldPos.copy(objWorldPos)
         this._hasLastValid = true
     }
 })

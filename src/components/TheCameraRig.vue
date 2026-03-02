@@ -5,6 +5,9 @@ import '../aframe/simple-navmesh-constraint.js'
 import '../aframe/blink-controls.js'
 import '../aframe/ray-follow-grab.js'
 import '../aframe/physx-grabbable.js'
+import '../aframe/laser-click.js'
+import '../aframe/catalog-spawner.js'
+import '../aframe/spawn-box.js'
 </script>
 
 <template>
@@ -19,7 +22,7 @@ import '../aframe/physx-grabbable.js'
       simple-navmesh-constraint="navmesh: [data-role='nav-mesh']; height: 1.65;"
       disable-in-vr="component: simple-navmesh-constraint;"
       camera
-      position="0 1.70 0"
+      position="0.37 1.70 -1.762"
     >
       <a-entity
         geometry="primitive: circle; radius: 0.0003;"
@@ -37,8 +40,9 @@ import '../aframe/physx-grabbable.js'
       id="hand-left"
       hand-controls="hand: left"
       laser-controls="hand: left"
+      laser-click="clickableSelector: .clickable"
       raycaster="far: 4; objects: .clickable; showLine: true;"
-      ray-follow-grab="useHitDistance: false; holdDistance: 0.7; maxDistance: 4; followRotation: false;"
+      ray-follow-grab="usePhysicsDrop: true; useHitDistance: false; holdDistance: 0.7; maxDistance: 4; followRotation: false;"
       blink-controls="
         cameraRig: #camera-rig;
         teleportOrigin: #head;
@@ -53,8 +57,9 @@ import '../aframe/physx-grabbable.js'
       id="hand-right"
       hand-controls="hand: right"
       laser-controls="hand: right"
+      laser-click="clickableSelector: .clickable"
       raycaster="far: 4; objects: .clickable; showLine: true;"
-      ray-follow-grab="useHitDistance: true; maxDistance: 4; followRotation: false;"
+      ray-follow-grab="useHitDistance: true; maxDistance: 4; followRotation: false; usePhysicsDrop: true;"
       position="0 1.5 0"
     ></a-entity>
   </a-entity>

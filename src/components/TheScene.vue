@@ -40,6 +40,8 @@ import Plank1 from '/assets/furnitures/plank1.glb?url'
 import Plank2 from '/assets/furnitures/plank2.glb?url'
 import Plant from '/assets/furnitures/plant.glb?url'
 import Vinyle from '/assets/furnitures/vinyle.glb?url'
+import TVTable from '/assets/furnitures/tv-table.glb?url'
+import CeilingLight from '/assets/ceiling-light.glb?url'
 
 import Navmesh from '/assets/navmesh.glb?url'
 
@@ -76,19 +78,34 @@ const allAssetsLoaded = ref(false)
       <a-asset-item id="plank2-asset" :src="Plank2"></a-asset-item>
       <a-asset-item id="plant-asset" :src="Plant"></a-asset-item>
       <a-asset-item id="vinyle-asset" :src="Vinyle"></a-asset-item>
-
+      <a-asset-item id="tv-table-asset" :src="TVTable"></a-asset-item>
       <a-asset-item id="navmesh-asset" :src="Navmesh"></a-asset-item>
+      <a-asset-item id="ceiling-light-asset" :src="CeilingLight"></a-asset-item>
 
       <a-asset-item id="cardbox-asset" :src="Cardbox"></a-asset-item>
 
-      <audio id="cardboard-sfx" src="/assets/sounds/box-sound.mp3" preload="auto"></audio>
-      <audio id="creak-sfx" src="/assets/sounds/creaking-wood.mp3" preload="auto"></audio>
+      <img id="sunset-sky-asset" :src="`assets/sunset-sky.jpg`" />
+
+      <audio id="ambient-music" :src="`assets/sounds/ambiance-music.mp3`" preload="auto"></audio>
+      <audio id="cardboard-sfx" :src="`assets/sounds/box-sound.mp3`" preload="auto"></audio>
+      <audio id="creak-sfx" :src="`assets/sounds/creaking-wood.mp3`" preload="auto"></audio>
     </a-assets>
 
     <template v-if="allAssetsLoaded">
-      <a-sky color="#87CEEB"></a-sky>
+    
+      <a-sky src="#sunset-sky-asset"></a-sky>
 
-      <a-entity light="type: ambient; color: #ffffff; intensity: 0.35"></a-entity>
+      <a-entity id="ambient-audio">
+      <a-sound
+        src="#ambient-music"
+        autoplay="true"
+        loop="true"
+        volume="0.4"
+        positional="false"
+      ></a-sound>
+    </a-entity>
+
+      <a-entity light="type: ambient; color: #ffffff; intensity: 0.8"></a-entity>
 
       <a-entity id="spawn-center" position="0 0.05 -2"></a-entity>
 
@@ -108,16 +125,27 @@ const allAssetsLoaded = ref(false)
         position="4 8 3"
       ></a-entity>
 
-      <!-- <a-entity
+      <a-entity
         light="
           type: point;
-          color: #ffe2b8;
-          intensity: 1.1;
-          distance: 0.7;
+          color: #fff3d1;
+          intensity: 0.8;
+          distance: 5;
           decay: 2;
+          castShadow: true;
+          shadowMapWidth: 1024;
+          shadowMapHeight: 1024;
         "
-        position="0 2 -1"
-      ></a-entity> -->
+        position="0.5 3.21 -2"
+      ></a-entity>
+
+      <a-entity
+        id="ceiling-light"
+        gltf-model="#ceiling-light-asset"
+        position="0.5 3.2 -2"
+        rotation="0 0 0"
+        scale="1 1 1"
+      ></a-entity>
 
       <a-entity id="spawned-items"></a-entity>
 
@@ -125,10 +153,9 @@ const allAssetsLoaded = ref(false)
         id="catalog-spawner"
         catalog-spawner="
           mode: roundrobin;
-          includeIds: desk,couch,chair,little-table,speaker,pc,keyboard,mouse,lamp,plant,little-plant,book2,books1,books2,cup,cup2,candle,kobo,painting,photo,vinyle,discs,plank1,plank2;
+          includeIds: desk,couch,chair,little-table,plank1,plank2,tv-table,speaker,plant,pc,keyboard,mouse,lamp,little-plant,book2,books1,books2,cup,cup2,candle,kobo,painting,photo,vinyle,discs;
           container: #spawned-items;
           hideTargetSelector: #cardboard-stack;
-          hideOnEmpty: true;
         "
       ></a-entity>
 
@@ -152,8 +179,8 @@ const allAssetsLoaded = ref(false)
         gltf-model="#cardbox-asset"
         position="-1.430 0 -0.130"
         rotation="0 0 0"
-        scale="1.3 1.3 1.3"
-        spawn-box="spawner: #catalog-spawner; cooldownMs: 450;"
+        scale="1.1 1.1 1.1"
+        spawn-box="spawner: #catalog-spawner; cooldownMs: 450"
       >
         <a-sound
           src="#cardboard-sfx"

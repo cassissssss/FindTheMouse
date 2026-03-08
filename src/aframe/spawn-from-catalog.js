@@ -11,8 +11,12 @@ AFRAME.registerComponent('spawn-from-catalog', {
         boundsSelector: { type: 'string', default: '#nav-mesh' },
         boundsPadding: { type: 'number', default: 0.6 },
 
-        // si tu veux éviter “collé à toi” => mets false
-        autoGrab: { type: 'boolean', default: true },
+        avoidOverlap: { type: 'boolean', default: true },
+        maxPlacementRadius: { type: 'number', default: 2 }, // rayon max autour du centre
+        placementTries: { type: 'number', default: 50 },      // nb de candidats testés
+        extraSpacing: { type: 'number', default: 0.10 },      // marge en + autour des objets
+
+        autoGrab: { type: 'boolean', default: false },
         grabDistance: { type: 'number', default: 1.0 },
 
         placementCollisionAttr: {
@@ -33,6 +37,13 @@ AFRAME.registerComponent('spawn-from-catalog', {
         this._boundsBox = new THREE.Box3()
         this._boundsCenter = new THREE.Vector3()
         this._boundsValid = false
+
+        // temps placement
+        this._tmpWorld = new THREE.Vector3()
+        this._tmpBox = new THREE.Box3()
+        this._tmpSize = new THREE.Vector3()
+
+        this._finalized = false
     },
 
     _emitBlocked(sceneEl, reason, extra = {}) {
@@ -48,9 +59,9 @@ AFRAME.registerComponent('spawn-from-catalog', {
         return sceneEl.querySelector(this.data.container) || sceneEl
     },
 
-    _countExisting(containerEl, itemId) {
+    _countExisting(sceneEl, itemId) {
         const safe = window.CSS && CSS.escape ? CSS.escape(itemId) : itemId.replace(/"/g, '\\"')
-        return containerEl.querySelectorAll(`[data-item-id="${safe}"]`).length
+        return sceneEl.querySelectorAll(`[data-item-id="${safe}"]`).length
     },
 
     _collectFloorMeshes(sceneEl) {
@@ -124,8 +135,71 @@ AFRAME.registerComponent('spawn-from-catalog', {
         const floorY = this._getFloorYAt(sceneEl, worldPos)
         worldPos.y = floorY + this.data.spawnHeight
         this._clampToBoundsXZ(worldPos)
-
         return worldPos
+    },
+
+    _getApproxRadiusFromEntity(entityEl) {
+        // bbox world -> size -> radius approx (XZ)
+        entityEl.object3D.updateMatrixWorld(true)
+        this._tmpBox.setFromObject(entityEl.object3D)
+        if (!isFinite(this._tmpBox.min.x) || !isFinite(this._tmpBox.max.x)) return 0.4
+        this._tmpBox.getSize(this._tmpSize)
+        const r = Math.max(this._tmpSize.x, this._tmpSize.z) * 0.5
+        return Math.max(0.15, r)
+    },
+
+    _worldToLocalInContainer(containerEl, worldPos) {
+        containerEl.object3D.updateMatrixWorld(true)
+        const local = worldPos.clone()
+        containerEl.object3D.worldToLocal(local)
+        return local
+    },
+
+    _setLocalPosition(entityEl, localPos) {
+        entityEl.setAttribute('position', `${localPos.x} ${localPos.y} ${localPos.z}`)
+        entityEl.object3D.updateMatrixWorld(true)
+    },
+
+    _findFreeSpot(sceneEl, containerEl, entityEl, baseWorldPos) {
+        // si tu n’as pas placement-collision => on fait un fallback simple (pas idéal)
+        const pc = entityEl.components?.['placement-collision']
+
+        const r0 = this._getApproxRadiusFromEntity(entityEl) + this.data.extraSpacing
+        const maxR = Math.max(r0, this.data.maxPlacementRadius)
+
+        // spiral “golden angle”
+        const golden = 2.399963229728653 // radians
+        const tries = Math.max(1, this.data.placementTries)
+
+        // test aussi la position de base d'abord
+        {
+            const p = baseWorldPos.clone()
+            p.y = this._getFloorYAt(sceneEl, p) + this.data.spawnHeight
+            this._clampToBoundsXZ(p)
+            const local = this._worldToLocalInContainer(containerEl, p)
+            this._setLocalPosition(entityEl, local)
+            if (!pc || pc.isValid()) return p
+        }
+
+        for (let i = 1; i <= tries; i++) {
+            const t = i / tries
+            const radius = THREE.MathUtils.lerp(r0, maxR, t)
+            const angle = i * golden
+
+            const p = baseWorldPos.clone()
+            p.x += Math.cos(angle) * radius
+            p.z += Math.sin(angle) * radius
+
+            p.y = this._getFloorYAt(sceneEl, p) + this.data.spawnHeight
+            this._clampToBoundsXZ(p)
+
+            const local = this._worldToLocalInContainer(containerEl, p)
+            this._setLocalPosition(entityEl, local)
+
+            if (!pc || pc.isValid()) return p
+        }
+
+        return baseWorldPos // fallback
     },
 
     _spawn() {
@@ -152,45 +226,32 @@ AFRAME.registerComponent('spawn-from-catalog', {
         const containerEl = this._getContainer(sceneEl)
 
         const max = Number.isFinite(item.maxInstances) ? item.maxInstances : 1
-        const already = this._countExisting(containerEl, item.id)
+        const already = this._countExisting(sceneEl, item.id)
         if (already >= max) {
             this._emitBlocked(sceneEl, 'max-instances', { itemId: item.id, max })
             return
         }
 
-        const spawnWorldPos = this._getSpawnWorldPos(sceneEl)
-        if (!spawnWorldPos) {
+        const baseWorldPos = this._getSpawnWorldPos(sceneEl)
+        if (!baseWorldPos) {
             this._emitBlocked(sceneEl, 'missing-bounds', { selector: this.data.boundsSelector })
             return
         }
 
         this._spawning = true
 
-        containerEl.object3D.updateMatrixWorld(true)
-        this._spawnLocalPos.copy(spawnWorldPos)
-        containerEl.object3D.worldToLocal(this._spawnLocalPos)
-
+        // create entity
         const entity = document.createElement('a-entity')
         entity.classList.add('clickable')
         entity.setAttribute('data-item-id', item.id)
 
-        entity.setAttribute(
-            'position',
-            `${this._spawnLocalPos.x} ${this._spawnLocalPos.y} ${this._spawnLocalPos.z}`
-        )
         entity.setAttribute('rotation', this._computeFlatYawRotation(sceneEl))
         entity.setAttribute('scale', item.default?.scale ?? '1 1 1')
-
-        // ✅ IMPORTANT : gltf-model SUR LE MÊME EL que le grab
         entity.setAttribute('gltf-model', item.assetId)
 
-        // grab target
+        // grabbable
         const yMode = item.default?.yMode ?? 'free'
         entity.setAttribute('physx-grabbable', `yMode: ${yMode}; floorOffsetY: 0.02`)
-
-        // physx direct (pas de reset après)
-        entity.setAttribute('physx-body', item.physx?.body ?? 'type: dynamic; mass: 1')
-        entity.setAttribute('physx-shape', item.physx?.shape ?? 'type: box')
 
         if (this.data.placementCollisionAttr) {
             entity.setAttribute('placement-collision', this.data.placementCollisionAttr)
@@ -205,27 +266,51 @@ AFRAME.registerComponent('spawn-from-catalog', {
 
         entity.setAttribute('shadow', 'cast: true; receive: true')
 
+        // ✅ pendant la recherche: body kinematic (ne bouge pas)
+        entity.setAttribute('physx-shape', item.physx?.shape ?? 'type: box')
+        entity.setAttribute('physx-body', (item.physx?.body ?? 'type: dynamic; mass: 1').replace('type: dynamic', 'type: kinematic'))
+
+        // position initiale (centre)
+        const local0 = this._worldToLocalInContainer(containerEl, baseWorldPos)
+        this._setLocalPosition(entity, local0)
+
         containerEl.appendChild(entity)
 
         const handEl = sceneEl.querySelector(this.data.handSelector)
 
+        this._finalized = false
+
         const finalize = () => {
+            if (this._finalized) return
+            this._finalized = true
+            const bodyStr = item.physx?.body ?? 'type: dynamic; mass: 1'
+            entity.setAttribute('physx-body', bodyStr)
+
             if (this.data.autoGrab && handEl) {
                 handEl.emit('grab:force', { target: entity, distance: this.data.grabDistance }, false)
             }
+
             sceneEl.emit('catalog:spawned', { itemId: item.id }, false)
             this._spawning = false
         }
 
-        // attend que le modèle existe (raycast + bbox + physx init)
-        entity.addEventListener('model-loaded', () => {
-            requestAnimationFrame(() => requestAnimationFrame(finalize))
-        }, { once: true })
+        entity.addEventListener(
+            'model-loaded',
+            () => {
+                // ✅ cherche une place libre après bbox dispo
+                if (this.data.avoidOverlap) {
+                    this._findFreeSpot(sceneEl, containerEl, entity, baseWorldPos)
+                }
+
+                requestAnimationFrame(() => requestAnimationFrame(finalize))
+            },
+            { once: true }
+        )
 
         // fallback
         setTimeout(() => {
             if (!this._spawning) return
             finalize()
-        }, 2000)
+        }, 2200)
     }
 })

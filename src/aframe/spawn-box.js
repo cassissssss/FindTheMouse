@@ -1,12 +1,13 @@
+// aframe/spawn-box.js
 AFRAME.registerComponent('spawn-box', {
     schema: {
         spawner: { type: 'string', default: '#catalog-spawner' },
         itemId: { type: 'string', default: '' },
 
-        // ✅ son
+        // son
         soundSelector: { type: 'string', default: 'a-sound' },
 
-        // ✅ anti double click
+        // anti double click
         cooldownMs: { type: 'number', default: 450 }
     },
 
@@ -55,12 +56,13 @@ AFRAME.registerComponent('spawn-box', {
     },
 
     _onClick(evt) {
-        // ✅ évite double déclenchement
+        evt?.stopPropagation?.()
+        evt?.preventDefault?.()
+
         if (this._locked) return
         this._locked = true
         setTimeout(() => (this._locked = false), this.data.cooldownMs)
 
-        // ✅ joue le son (sans stopper la propagation)
         this._playSound()
 
         const sceneEl = this.el.sceneEl

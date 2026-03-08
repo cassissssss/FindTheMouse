@@ -1,18 +1,18 @@
 <p align="center">
-    <img src="./logo.svg" alt="VAV Logo" align="center"/>
+    <img src="./game-logo.svg" alt="Game Logo" align="center"/>
 </p>
-<h1 align="center">Vue + A-Frame + Vite boilerplate</h1>
+<h1 align="center">Furnitures Simulator</h1>
 
-> A boilerplate for A-Frame, Vue and Vite
+> A game made with A-Frame, Vue and Vite
 
 ![Vue.js](https://img.shields.io/badge/vuejs-%2335495e.svg?style=for-the-badge&logo=vuedotjs&logoColor=%234FC08D)
 ![A-Frame](https://img.shields.io/badge/A%E2%80%93Frame-brightgreen?style=for-the-badge&labelColor=%23ef2d5e&color=%23ef2d5e)
 ![Threejs](https://img.shields.io/badge/threejs-black?style=for-the-badge&logo=three.js&logoColor=white)
 ![Vite](https://img.shields.io/badge/vite-%23646CFF.svg?style=for-the-badge&logo=vite&logoColor=white)
 
-### [>> DEMO <<](https://onivers.com/aframe-vue-boilerplate/)
+### [>> DEMO <<](https://vr.onivers.com/christel/)
 
-## Included in the boilerplate
+## Included in the game
 
 ### Libs and components
 
@@ -26,12 +26,13 @@
 
 - **Desktop** – Keyboard for move (_WASD_ or Arrows keys) + Mouse for look control (Drag and drop)
 - **Mobile** – 1x Finger touch to go forward + 2x Fingers touch to go backward + Gaze cursor for click
-- **VR/AR** – walk + Teleport (Grip for grab and laser for click) + Gaze cursor for click in AR
+- **VR/AR** – walk + Teleport (Grip for grab and laser for click) + Gaze cursor for click in AR - grab objects from box with right hand + move with joystick or real deplacements
 
 ### 3D models
 
-- **Main room** – [VR Gallery](https://sketchfab.com/3d-models/vr-gallery-1ac32ed62fdf424498acc146fad31f7e) by [Maxim Mavrichev](https://sketchfab.com/mvrc.art) is licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)
-- **3D physic room** – [3d_gallery_for_vr_projects](https://sketchfab.com/3d-models/3d-gallery-for-vr-projects-68f77ed8558c4bd59e0a13e2cc9d1fd1) by [tekuto1s](https://sketchfab.com/tekuto1s) is licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)
+- **Main room with furnitures** – [Room Diorama Model](https://sketchfab.com/3d-models/room-diorama-model-5b51ae0e29824c44be9af54f9e9c2b88) by [mechamocha](https://sketchfab.com/mechamocha) is licensed under [CC Attribution](https://creativecommons.org/licenses/by/4.0/)
+- **Ceiling light** - [Light Fixture - Ceiling Recessed] (https://sketchfab.com/3d-models/light-fixture-ceiling-recessed-269fd427629548a8a0949a6493c5b223) by [MozillaHubs] (https://sketchfab.com/mozillareality) is licensed under [CC Attribution] (https://creativecommons.org/licenses/by/4.0/)
+- **Cardboard** - [Cardboard Box Set- Low Poly] (https://sketchfab.com/3d-models/cardboard-box-set-low-poly-5d3d508061e544739e37c685af235684) by [Nodeaxis Interactive] (https://sketchfab.com/ar.jethin) is licensed under [CC Attribution] (https://creativecommons.org/licenses/by/4.0/)
 
 ---
 
@@ -42,7 +43,7 @@
 ### Clone (or fork, or download)
 
 ```sh
-git clone https://github.com/Chabloz/a-frame-vite-vue-boilerplate.git .
+git clone https://github.com/cassissssss/FurnituresSimulator .
 ```
 
 ### Install dependencies

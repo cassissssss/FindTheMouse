@@ -12,18 +12,21 @@
     if (AFRAME.utils.device.checkHeadsetConnected() && !AFRAME.utils.device.isMobile()) {
       document.querySelector('a-scene').enterVR();
     }
-    document.querySelector('a-scene').emit('enter-scene');
+    document.querySelector('a-scene').emit('Play game');
   }
 </script>
 
 <template>
   <div id="onboarding" v-if="showOnboarding">
     <div>
-      <h1>A-Frame + Vite + Vue Boilerplate</h1>
+      <h1>Furnitures Simulator</h1>
       <p v-if="!loaded">loading...</p>
-      <button v-if="loaded" @click="enterScene()">Enter scene</button>
+      <button v-if="loaded" @click="enterScene()">Play Game</button>
+      <p> Turn on sound for better experience !</p>
       <div class="licences">
         <section>
+          <h4>Welcome to my little game Furnitures Simulator</h4>
+          <p>Feel free to explore the virtual room and interact with the furniture.</p>
           <h4>Movement modes support</h4>
           <ul>
             <li>
@@ -31,18 +34,15 @@
               control (Drag and drop)
             </li>
             <li>
-              Mobile – 1x Finger touch to go forward + 2x Fingers touch to go
-              backward + Gaze cursor for click
-            </li>
-            <li>
               VR/AR – walk + Teleport (Grip for grab and laser for
               click) + Gaze cursor for click
+              - grab with right controller and move objects with joystick or real movement, you can also rotate with joystick while grabbing
             </li>
           </ul>
         </section>
         <section>
           <h4>Source code</h4>
-          <blockquote><a href="https://github.com/Chabloz/a-frame-vite-vue-boilerplate">Github repo</a></blockquote>
+          <blockquote><a href="https://github.com/cassissssss/FurnituresSimulator">Github repo</a></blockquote>
         </section>
         <dl>
           <dt>
@@ -79,17 +79,24 @@
           </dd>
 
           <dt>
-            <a href="https://sketchfab.com/3d-models/vr-gallery-1ac32ed62fdf424498acc146fad31f7e" target="_blank">VR Gallery</a>
+            <a href="https://sketchfab.com/3d-models/room-diorama-model-5b51ae0e29824c44be9af54f9e9c2b88" target="_blank">Room Diorama Model</a>
           </dt><dd>
-            by <a href="https://sketchfab.com/mvrc.art" target="_blank">Maxim Mavrichev</a>
-            under <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank">CC BY 4.0</a>
+            by <a href="https://sketchfab.com/mechamocha" target="_blank">mechamocha</a>
+            under <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank">CC Attribution</a>
           </dd>
 
           <dt>
-            <a href="https://sketchfab.com/3d-models/3d-gallery-for-vr-projects-68f77ed8558c4bd59e0a13e2cc9d1fd1" target="_blank">Physic room model</a>
+            <a href="https://sketchfab.com/3d-models/light-fixture-ceiling-recessed-269fd427629548a8a0949a6493c5b223" target="_blank">Light Fixture - Ceiling Recessed</a>
           </dt><dd>
-            by <a href="https://sketchfab.com/tekuto1s" target="_blank">tekuto1s</a>
-            under <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank">CC BY 4.0</a>
+            by <a href="https://sketchfab.com/mozillareality" target="_blank">MozillaHubs</a>
+            under <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank">CC Attribution</a>
+          </dd>
+
+          <dt>
+            <a href="https://sketchfab.com/3d-models/cardboard-box-set-low-poly-5d3d508061e544739e37c685af235684" target="_blank">Cardboard Box Set - Low Poly</a>
+          </dt><dd>
+            by <a href="https://sketchfab.com/ar.jethin" target="_blank">Nodeaxis Interactive</a>
+            under <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank">CC Attribution</a>
           </dd>
 
         </dl>
@@ -101,7 +108,7 @@
 <style scoped>
   h1 { font-size: 1.5rem }
   a {
-    color: #eee;
+    color: #333;
     text-decoration: none;
   }
   .licences {
@@ -124,8 +131,8 @@
     position: absolute;
     top: 0;
     left: 0;
-    background-color: #333;
-    color: #ccc;
+    background-color: #8ce8be;
+    color: #333;
     width: 100vw;
     height: 100vh;
     padding: 1rem;
@@ -146,8 +153,8 @@
     font-size: 1.3rem;
     padding: 0.5rem 1rem;
     border-radius: 0.3rem;
-    background-color: white;
-    color: black;
+    background-color: #333;
+    color: #8ce8be;
     border: none;
     cursor: pointer;
   }
